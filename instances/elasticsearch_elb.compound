@@ -1,0 +1,271 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+
+    "Description" : "This template creates and Elasticsearch cluster along with Kibana that hooks up with real-time data from CloudWatch Logs using a Subscription Filter, fronted by an Elastic Load Balancer.",
+    "Parameters" : 
+    {
+        "VPC" :
+        {
+            "Description" : "VPC ID",
+            "Type" : "AWS::EC2::VPC::Id"
+        },
+        "PublicSubnetIDs" :
+        {
+            "Description" : "A list of Public subnet IDs to attach to the load balancer.",
+            "Type" : "List<AWS::EC2::Subnet::Id>"
+        },
+        "PrivateSubnetIDs" :
+        {
+            "Description" : "List of Private Subnet IDs where the Elasticsearch instances will run.",
+            "Type" : "List<AWS::EC2::Subnet::Id>"
+        },        
+        "KeyPairName" : 
+        {
+            "Description" : "The name of an existing key pair to enable SSH access to the EC2 instances",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+
+        "InstanceType" : 
+        {
+            "Description" : "EC2 instance type for the Elasticsearch nodes",
+            "Type" : "String",
+            "Default" : "t2.medium",
+            "AllowedValues" : 
+            [ 
+                "t2.micro",
+                "t2.small",
+                "t2.medium",
+                "c4.large",
+                "c4.xlarge",
+                "m4.large",
+                "m4.xlarge"
+            ],
+            "ConstraintDescription" : "Must be a valid EC2 instance type"
+        },
+        "AllowedIpSource" : 
+        {
+            "Description" : "The IP address range that can be used to access the Kibana interface, the Elasticsearch API, and the EC2 instances via SSH",
+            "Type" : "String",
+            "MinLength" : "9",
+            "MaxLength" : "18",
+            "Default" : "0.0.0.0/0",
+            "AllowedPattern" : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription" : "Must be a valid IP CIDR range of the form x.x.x.x/x"
+        },
+        "ClusterSize" : 
+        {
+            "Description" : "The number of Elasticsearch nodes",
+            "Type" : "Number",
+            "Default" : "1"
+        },
+        "LogGroupName" : 
+        {
+            "Description" : "The CloudWatch Logs log group to use as the source for the subscription that feeds the Elasticsearch cluster",
+            "Type": "String",
+            "Default": ""
+        },
+        "NginxUsername" : 
+        {
+            "Description" : "Username to access the Kibana interface and the Elasticsearch API",
+            "Type" : "String",
+            "MinLength" : "1"
+        },
+        "NginxPassword" : 
+        {
+            "Description" : "Password to access the Kibana interface and the Elasticsearch API",
+            "Type" : "String",
+            "NoEcho" : "true"
+        },
+        "RetentionDays" : 
+        {
+            "Description" : "Number of days to retain logs in the Elasticsearch cluster",
+            "Type" : "Number",
+            "Default" : "14",
+            "MinValue" : "1"
+        },
+        "MonitorStack" : 
+        {
+            "Description" : "Push logs from Elasticsearch, Nginx, KCL and CloudFormation to CloudWatch Logs",
+            "Type" : "String",
+            "Default" : "true",
+            "AllowedValues" : 
+            [
+                "true",
+                "false"
+            ]
+        },
+        "LogFormat" : 
+        {
+            "Description" : "Choose the format that best describes the type of logs in the selected log group",
+            "Type" : "String",
+            "Default" : "Custom",
+            "AllowedValues" : 
+            [
+                "AmazonVPCFlowLogs",
+                "AWSLambda",
+                "AWSCloudTrail",
+                "Custom"
+            ]
+        },
+        "SubscriptionFilterPattern" : 
+        {
+            "Description" : "Optional filter pattern for custom log formats - Use this only if LogFormat is set to Custom",
+            "Type" : "String"
+        },
+        "KinesisShards" : 
+        {
+            "Description" : "Number of shards to create for the Kinesis subscription stream",
+            "Type" : "Number",
+            "Default" : "1",
+            "MinValue" : "1"
+        },
+        "ElasticsearchShards" : 
+        {
+            "Description" : "The number of primary shards that an Elasticsearch index should have",
+            "Type" : "Number",
+            "Default" : "5",
+            "MinValue" : "0"
+        },
+        "ElasticsearchReplicas" : 
+        {
+            "Description" : "The number of replica shards (copies) that each primary Elasticsearch shard should have",
+            "Type" : "Number",
+            "Default" : "0",
+            "MinValue" : "0"
+        }
+    },
+    "Resources" :
+    {
+        "EsSecurityGroupStack" :
+        {
+            "Type" : "AWS::CloudFormation::Stack",
+            "Properties" :
+            {
+                "TemplateURL" : "https://s3.amazonaws.com/dicelab-elasticsearch/es_security_group.element",
+                "Parameters" :
+                {
+                    "VPC" :
+                    {
+                        "Ref" : "VPC"
+                    }    
+                }
+            }
+        },
+        "EsElbStack" :
+        {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : "EsSecurityGroupStack",
+            "Properties" :
+            {
+                "TemplateURL" : "https://s3.amazonaws.com/dicelab-elasticsearch/es_elb_public.element",
+                "Parameters" :
+                {
+                    "AllowedIpSource" : {"Ref" : "AllowedIpSource"},
+                    "PublicSubnetIDs" :
+                    {
+                        "Fn::Join" :
+                        [
+                            ",",
+                            { "Ref" : "PublicSubnetIDs" }
+                        ]
+                    },
+                    "SecurityGroupId" :
+                    {
+                        "Fn::GetAtt" :
+                        [
+                            "EsSecurityGroupStack",
+                            "Outputs.EsSecurityGroupId"
+                        ]
+                    }
+                }
+            }
+        },
+        "EsStack" :
+        {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : "EsElbStack",
+            "Properties" :
+            {
+                "TemplateURL" : "https://s3.amazonaws.com/dicelab-elasticsearch/es_private_autoscale_elb.element",
+                "Parameters" :
+                {
+                    "KeyPairName" : {"Ref" : "KeyPairName"},
+                    "InstanceType" : {"Ref" : "InstanceType"},
+                    "ClusterSize" : {"Ref" : "ClusterSize"},
+                    "LogGroupName" : {"Ref" : "LogGroupName"},
+                    "NginxUsername" : {"Ref" : "NginxUsername"},
+                    "NginxPassword" : {"Ref" : "NginxPassword"},
+                    "RetentionDays" : {"Ref" : "RetentionDays"},
+                    "MonitorStack" : {"Ref" : "MonitorStack"},
+                    "LogFormat" : {"Ref" : "LogFormat"},
+                    "SubscriptionFilterPattern" : {"Ref" : "SubscriptionFilterPattern"},
+                    "KinesisShards" : {"Ref" : "KinesisShards"},
+                    "ElasticsearchShards" : {"Ref" : "ElasticsearchShards"},
+                    "ElasticsearchReplicas" : {"Ref" : "ElasticsearchReplicas"},
+                    "PrivateSubnetIDs" : {"Ref" : "PrivateSubnetIDs"},
+                    "SecurityGroupIDs" :
+                    { "Fn::Join" : [ ",", [
+                        {
+                            "Fn::GetAtt" :
+                                [
+                                    "EsSecurityGroupStack",
+                                    "Outputs.ESSecurityGroupId"
+                                ]
+                        }
+                    ]]}
+                }    
+            }        
+        }
+    },    
+    "Outputs" :
+    {
+        "Kibana3" :
+        {
+            "Description" : "Kibana 3 (Includes Sample Dashboards)",
+            "Value" :
+            {
+                "Fn::Join" : 
+                [
+                    "", 
+                    [ "http://", { "Fn::GetAtt" : [ "EsElbStack", "Outputs.DNSName" ]}, "/kibana3/#"]
+                ]
+            }
+        },
+        "Kibana4" : 
+        {
+            "Description" : "Kibana 4",
+            "Value" :  
+            {
+                "Fn::Join" : 
+                [ 
+                    "", 
+                    [ "http://", { "Fn::GetAtt" : [ "EsElbStack", "Outputs.DNSName" ]}, "/kibana4/#"]
+                ]
+            }
+        },
+        "Elasticsearch" :
+        {
+            "Description" : "Elasticsearch API",
+            "Value" :  
+            { 
+                "Fn::Join" : 
+                [ 
+                    "",
+                    [ "http://", { "Fn::GetAtt" : [ "EsElbStack", "Outputs.DNSName" ]}, "/?pretty"]
+                ]
+            }
+        },
+        "Kopf" :
+        {
+            "Description" : "Kopf Admin Tool",
+            "Value" :
+            { 
+                "Fn::Join" :
+                [ 
+                    "", 
+                    [ "http://", { "Fn::GetAtt" : [ "EsElbStack", "Outputs.DNSName" ]}, "/_plugin/kopf"]
+                ]
+            }
+        }
+    }       
+}    
