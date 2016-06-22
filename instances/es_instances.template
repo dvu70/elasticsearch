@@ -19,7 +19,7 @@
             "Description" : "List of Private Subnet IDs where the Elasticsearch instances will run.",
             "Type" : "List<AWS::EC2::Subnet::Id>"
         },        
-        "KeyName" : 
+        "KeyPairName" : 
         {
             "Description" : "The name of an existing key pair to enable SSH access to the EC2 instances",
             "Type": "AWS::EC2::KeyPair::KeyName"
@@ -226,7 +226,7 @@
                 "Fn::Equals" : 
                 [
                     {
-                        "Ref" : "KeyName"
+                        "Ref" : "KeyPairName"
                     },
                         ""
                 ]
@@ -774,7 +774,12 @@
                                             "cp -R ./", 
                                             { 
                                                 "Fn::FindInMap" :
-                                                [ "Constants", "S3DownloadFile", "Value" ]} ,"/configuration/elasticsearch/* /etc/elasticsearch/"]
+                                                [
+                                                    "Constants", "S3DownloadFile", "Value" 
+                                                ]
+                                            } ,
+                                            "/configuration/elasticsearch/* /etc/elasticsearch/"
+                                        ]
                                     ]
                                 }
                             },
@@ -991,7 +996,7 @@
                 "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
                 "InstanceType" : { "Ref" : "InstanceType" },
                 "SecurityGroups" : [ {"Ref" : "ElasticsearchSecurityGroup"} ],
-                "KeyName" : { "Ref" : "KeyName" },
+                "KeyPairName" : { "Ref" : "KeyPairName" },
                 "IamInstanceProfile" : { "Ref" : "ElasticsearchInstanceProfile" },
                 "AssociatePublicIpAddress" : true,
                 "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [

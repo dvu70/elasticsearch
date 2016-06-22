@@ -147,7 +147,8 @@
                     "VPC" :
                     {
                         "Ref" : "VPC"
-                    }    
+                    },
+                    "UseELB" : "true"
                 }
             }
         },
