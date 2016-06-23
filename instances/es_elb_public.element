@@ -1,0 +1,56 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "This template creates a public Elastic Load Balancer using HTTPS on port 443",
+    "Parameters" :
+    {
+        "PublicSubnetIDs" :
+        {
+            "Description" : "A list of Public subnet IDs to attach to the load balancer.",
+            "Type" : "List<AWS::EC2::Subnet::Id>"
+        },
+        "SecurityGroupId" :
+        {
+            "Description" : "ID of the security group for ELB",
+            "Type" : "AWS::EC2::SecurityGroup::Id"
+        }
+    },
+    "Resources" :
+    {
+        "ElasticsearchELB" :
+        {
+            "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties" :
+            {
+                "Subnets" : { "Ref" : "PublicSubnetIDs" },
+                "CrossZone" : "true",
+                "SecurityGroups" : { "Ref" : "SecurityGroupId"},
+                "Listeners" : [ {
+                "LoadBalancerPort" : "80",
+                "InstancePort" : "8080",
+                "Protocol" : "HTTP"
+            } ],
+            "HealthCheck" : 
+            {
+                "Target" : "TCP:8080",
+                "HealthyThreshold" : 3,
+                "UnhealthyThreshold" : 2,
+                "Interval" : 10,
+                "Timeout" : 5
+            }
+            }
+        }    
+    },       
+    "Outputs" :
+    {
+        "LoadBalancerName" :
+        {
+          "Description" : "Name of the Elastic Load Balancer",
+          "Value" : { "Ref" : "ElasticsearchELB" }
+        },
+        "LoadBalancerDns" :
+        {
+          "Description" : "DNS name for the ELB",
+          "Value" : { "Fn::GetAtt" : ["ElasticsearchELB", "DNSName"] }
+        }
+    }
+}

@@ -148,8 +148,15 @@
                     {
                         "Ref" : "VPC"
                     },
-                    "UseELB" : "true"
-                }
+                    "AllowedIpSource" :
+                    {
+                        "Ref" : "AllowedIpSource"
+                    },
+                    "KinesisShards" :
+                    {
+                        "Ref" : "KinesisShards"
+                    }
+                }        
             }
         },
         "EsElbStack" :
