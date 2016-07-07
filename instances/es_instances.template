@@ -19,7 +19,7 @@
             "Description" : "List of Private Subnet IDs where the Elasticsearch instances will run.",
             "Type" : "List<AWS::EC2::Subnet::Id>"
         },        
-        "KeyPairName" : 
+        "KeyName" : 
         {
             "Description" : "The name of an existing key pair to enable SSH access to the EC2 instances",
             "Type": "AWS::EC2::KeyPair::KeyName"
@@ -226,7 +226,7 @@
                 "Fn::Equals" : 
                 [
                     {
-                        "Ref" : "KeyPairName"
+                        "Ref" : "KeyName"
                     },
                         ""
                 ]
@@ -461,9 +461,9 @@
                             "Effect" : "Allow",
                             "Action" :
                             [
-                                "kinesis : Get*",
-                                "kinesis : List*",
-                                "kinesis : Describe*"
+                                "kinesis:Get*",
+                                "kinesis:List*",
+                                "kinesis:Describe*"
                             ],
                             "Resource":
                             { 
@@ -491,7 +491,7 @@
                             "Effect" : "Allow",
                             "Action" : 
                             [
-                                "logs : *"
+                                "logs:*"
                             ],
                             "Resource" : "*"
                         },
@@ -774,12 +774,7 @@
                                             "cp -R ./", 
                                             { 
                                                 "Fn::FindInMap" :
-                                                [
-                                                    "Constants", "S3DownloadFile", "Value" 
-                                                ]
-                                            } ,
-                                            "/configuration/elasticsearch/* /etc/elasticsearch/"
-                                        ]
+                                                [ "Constants", "S3DownloadFile", "Value" ]} ,"/configuration/elasticsearch/* /etc/elasticsearch/"]
                                     ]
                                 }
                             },
@@ -917,7 +912,7 @@
                             {
                                 "source" : "https://bootstrap.pypa.io/get-pip.py"
                             },
-                            "/etc/awslogs/awslogs.conf" :
+                            "/etc/awslogs/awslogs.conf":
                             {
                                 "Fn::If" : [
                                     "CreateCWLForStack",
@@ -996,7 +991,7 @@
                 "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
                 "InstanceType" : { "Ref" : "InstanceType" },
                 "SecurityGroups" : [ {"Ref" : "ElasticsearchSecurityGroup"} ],
-                "KeyPairName" : { "Ref" : "KeyPairName" },
+                "KeyName" : { "Ref" : "KeyName" },
                 "IamInstanceProfile" : { "Ref" : "ElasticsearchInstanceProfile" },
                 "AssociatePublicIpAddress" : true,
                 "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
